@@ -474,6 +474,106 @@ namespace pu::ui::elm
                     }
                 }
             }
+            else if((Down & KEY_DRIGHT) || (Down & KEY_LSTICK_RIGHT) || (Held & KEY_RSTICK_RIGHT))
+            {
+                bool move = true;
+                if(Held & KEY_RSTICK_RIGHT)
+                {
+                    move = false;
+                    if(basestatus == 0)
+                    {
+                        basetime = std::chrono::steady_clock::now();
+                        basestatus = 1;
+                    }
+                    else if(basestatus == 2)
+                    {
+                        basestatus = 0;
+                        move = true;
+                    }
+                }
+                if(move)
+                {
+                    // Sorry I seriously can't read these, so I have to hack it with a for loop
+                    for (int i = 0; i < this->ishow; ++i) {
+                        if(this->isel < (this->itms.size() - 1))
+                        {
+                            if((this->isel - this->fisel) == (this->ishow - 1))
+                            {
+                                this->fisel++;
+                                this->isel++;
+                                (this->onselch)();
+                            }
+                            else
+                            {
+                                this->previsel = this->isel;
+                                this->isel++;
+                                (this->onselch)();
+                                if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
+                                {
+                                    if(i == this->isel) this->selfact = 0;
+                                    else if(i == this->previsel) this->pselfact = 255;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            this->isel = 0;
+                            this->fisel = 0;
+                        }
+                    }
+                    ReloadItemRenders();
+                }
+            }
+            else if((Down & KEY_DLEFT) || (Down & KEY_LSTICK_LEFT) || (Held & KEY_RSTICK_LEFT))
+            {
+                bool move = true;
+                if(Held & KEY_RSTICK_LEFT)
+                {
+                    move = false;
+                    if(basestatus == 0)
+                    {
+                        basetime = std::chrono::steady_clock::now();
+                        basestatus = 1;
+                    }
+                    else if(basestatus == 2)
+                    {
+                        basestatus = 0;
+                        move = true;
+                    }
+                }
+                if(move)
+                {
+                    for (int i = 0; i < this->ishow; ++i) {
+                        if(this->isel > 0)
+                        {
+                            if(this->isel == this->fisel)
+                            {
+                                this->fisel--;
+                                this->isel--;
+                                (this->onselch)();
+                            }
+                            else
+                            {
+                                this->previsel = this->isel;
+                                this->isel--;
+                                (this->onselch)();
+                                if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
+                                {
+                                    if(i == this->isel) this->selfact = 0;
+                                    else if(i == this->previsel) this->pselfact = 255;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            this->isel = this->itms.size() - 1;
+                            this->fisel = 0;
+                            if(this->itms.size() >= this->ishow) this->fisel = this->itms.size() - this->ishow;
+                        }
+                        ReloadItemRenders();
+                    }
+                }
+            }
             else
             {
                 s32 ipc = this->itms[this->isel]->GetCallbackCount();
