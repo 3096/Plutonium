@@ -76,16 +76,17 @@ namespace pu::ui::elm
             void OnRender(render::Renderer *Drawer);
             void OnInput(u64 Down, u64 Up, u64 Held, bool Touch, bool Focus);
         private:
+            void ChangeSelectedIndex(s32 idxChange);
             void ReloadItemRenders();
             bool dtouch;
             s32 x;
             s32 y;
             s32 w;
             s32 isize;
-            s32 ishow;
-            s32 previsel;
-            s32 fisel;
-            s32 isel;
+            s32 itemsToShow;
+            s32 prevSelectItmIdx;
+            s32 topItmIdx;
+            s32 selectItmIdx;
             s32 pselfact;
             s32 selfact;
             Color scb;

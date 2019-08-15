@@ -80,10 +80,10 @@ namespace pu::ui::elm
         this->clr = OptionColor;
         this->scb = { 110, 110, 110, 255 };
         this->isize = ItemSize;
-        this->ishow = ItemsToShow;
-        this->previsel = 0;
-        this->isel = 0;
-        this->fisel = 0;
+        this->itemsToShow = ItemsToShow;
+        this->prevSelectItmIdx = 0;
+        this->selectItmIdx = 0;
+        this->topItmIdx = 0;
         this->selfact = 255;
         this->pselfact = 0;
         this->onselch = [&](){};
@@ -131,7 +131,7 @@ namespace pu::ui::elm
 
     s32 Menu::GetHeight()
     {
-        return (this->isize * this->ishow);
+        return (this->isize * this->itemsToShow);
     }
 
     s32 Menu::GetItemSize()
@@ -146,12 +146,12 @@ namespace pu::ui::elm
 
     s32 Menu::GetNumberOfItemsToShow()
     {
-        return this->ishow;
+        return this->itemsToShow;
     }
 
     void Menu::SetNumberOfItemsToShow(s32 ItemsToShow)
     {
-        this->ishow = ItemsToShow;
+        this->itemsToShow = ItemsToShow;
     }
 
     Color Menu::GetColor()
@@ -207,28 +207,28 @@ namespace pu::ui::elm
 
     MenuItem *Menu::GetSelectedItem()
     {
-        return this->itms[this->isel];
+        return this->itms[this->selectItmIdx];
     }
 
     s32 Menu::GetSelectedIndex()
     {
-        return this->isel;
+        return this->selectItmIdx;
     }
 
     void Menu::SetSelectedIndex(s32 Index)
     {
         if(this->itms.size() > Index)
         {
-            this->isel = Index;
-            this->fisel = 0;
-            if(this->isel > 0)
+            this->selectItmIdx = Index;
+            this->topItmIdx = 0;
+            if(this->selectItmIdx > 0)
             {
-                u32 div = (this->itms.size() + this->ishow - 1) / this->ishow;
+                u32 div = (this->itms.size() + this->itemsToShow - 1) / this->itemsToShow;
                 for(u32 i = 0; i < div; i++)
                 {
-                    if((this->ishow * i) > this->isel)
+                    if((this->itemsToShow * i) > this->selectItmIdx)
                     {
-                        this->fisel = this->ishow * (i - 1);
+                        this->topItmIdx = this->itemsToShow * (i - 1);
                         break;
                     }
                 }
@@ -247,11 +247,11 @@ namespace pu::ui::elm
             s32 cy = this->y;
             s32 cw = this->w;
             s32 ch = this->isize;
-            s32 its = this->ishow;
-            if(its > this->itms.size()) its = this->itms.size();
-            if((its + this->fisel) > this->itms.size()) its = this->itms.size() - this->fisel;
+            s32 itemsShown = this->itemsToShow;
+            if(itemsShown > this->itms.size()) itemsShown = this->itms.size();
+            if((itemsShown + this->topItmIdx) > this->itms.size()) itemsShown = this->itms.size() - this->topItmIdx;
             if(this->loadednames.empty()) ReloadItemRenders();
-            for(s32 i = this->fisel; i < (its + this->fisel); i++)
+            for(s32 i = this->topItmIdx; i < (itemsShown + this->topItmIdx); i++)
             {
                 s32 clrr = this->clr.R;
                 s32 clrg = this->clr.G;
@@ -263,10 +263,10 @@ namespace pu::ui::elm
                 s32 nb = clrb - 70;
                 if(nb < 0) nb = 0;
                 Color nclr(nr, ng, nb, this->clr.A);
-                auto loadedidx = i - this->fisel;
+                auto loadedidx = i - this->topItmIdx;
                 auto curname = this->loadednames[loadedidx];
                 auto curicon = this->loadedicons[loadedidx];
-                if(this->isel == i)
+                if(this->selectItmIdx == i)
                 {
                     Drawer->RenderRectangleFill(this->clr, cx, cy, cw, ch);
                     if(this->selfact < 255)
@@ -276,7 +276,7 @@ namespace pu::ui::elm
                     }
                     else Drawer->RenderRectangleFill(this->fcs, cx, cy, cw, ch);
                 }
-                else if(this->previsel == i)
+                else if(this->prevSelectItmIdx == i)
                 {
                     Drawer->RenderRectangleFill(this->clr, cx, cy, cw, ch);
                     if(this->pselfact > 0)
@@ -302,7 +302,7 @@ namespace pu::ui::elm
                 Drawer->RenderTexture(curname, tx, ty);
                 cy += ch;
             }
-            if(this->ishow < this->itms.size())
+            if(this->itemsToShow < this->itms.size())
             {
                 s32 sccr = this->scb.R;
                 s32 sccg = this->scb.G;
@@ -317,14 +317,41 @@ namespace pu::ui::elm
                 s32 scx = this->x + (this->w - 20);
                 s32 scy = this->y;
                 s32 scw = 20;
-                s32 sch = (this->ishow * this->isize);
+                s32 sch = (this->itemsToShow * this->isize);
                 Drawer->RenderRectangleFill(this->scb, scx, scy, scw, sch);
-                s32 fch = ((this->ishow * sch) / this->itms.size());
-                s32 fcy = scy + (this->fisel * (sch / this->itms.size()));
+                s32 fch = ((this->itemsToShow * sch) / this->itms.size());
+                s32 fcy = scy + (this->topItmIdx * (sch / this->itms.size()));
                 Drawer->RenderRectangleFill(sclr, scx, fcy, scw, fch);
             }
             Drawer->RenderShadowSimple(cx, cy, cw, 5, 160);
         }
+    }
+
+    void Menu::ChangeSelectedIndex(s32 idxChange)
+    {
+        this->prevSelectItmIdx = this->selectItmIdx;
+        this->selectItmIdx += idxChange;
+
+        // roll over
+        if(this->selectItmIdx < 0) {
+            this->selectItmIdx = this->itms.size() - 1;
+        } else if (this->selectItmIdx >= this->itms.size()) {
+            this->selectItmIdx = 0;
+        }
+
+        // move menu anchor if needed
+        if(this->topItmIdx > this->selectItmIdx) {
+            this->topItmIdx = this->selectItmIdx;
+        } else if (this->topItmIdx < this->selectItmIdx - (this->itemsToShow - 1)) {
+            this->topItmIdx = this->selectItmIdx - (this->itemsToShow - 1);
+        }
+
+        // invoke callback
+        (this->onselch)();
+
+        // fade out animation transparencies
+        this->selfact = 0;
+        this->pselfact = 255;
     }
 
     void Menu::OnInput(u64 Down, u64 Up, u64 Held, bool Touch, bool Focus)
@@ -346,19 +373,19 @@ namespace pu::ui::elm
             s32 cy = this->y;
             s32 cw = this->w;
             s32 ch = this->isize;
-            s32 its = this->ishow;
-            if(its > this->itms.size()) its = this->itms.size();
-            if((its + this->fisel) > this->itms.size()) its = this->itms.size() - this->fisel;
-            for(s32 i = this->fisel; i < (this->fisel + its); i++)
+            s32 itemsShown = this->itemsToShow;
+            if(itemsShown > this->itms.size()) itemsShown = this->itms.size();
+            if((itemsShown + this->topItmIdx) > this->itms.size()) itemsShown = this->itms.size() - this->topItmIdx;
+            for(s32 i = this->topItmIdx; i < (this->topItmIdx + itemsShown); i++)
             {
                 if(((cx + cw) > tch.px) && (tch.px > cx) && ((cy + ch) > tch.py) && (tch.py > cy))
                 {
                     this->dtouch = true;
-                    this->previsel = this->isel;
-                    this->isel = i;
+                    this->prevSelectItmIdx = this->selectItmIdx;
+                    this->selectItmIdx = i;
                     (this->onselch)();
-                    if(i == this->isel) this->selfact = 255;
-                    else if(i == this->previsel) this->pselfact = 0;
+                    if(i == this->selectItmIdx) this->selfact = 255;
+                    else if(i == this->prevSelectItmIdx) this->pselfact = 0;
                     break;
                 }
                 cy += this->isize;
@@ -369,7 +396,7 @@ namespace pu::ui::elm
             if((this->selfact >= 255) && (this->pselfact <= 0))
             {
                 if(this->icdown) this->icdown = false;
-                else (this->itms[this->isel]->GetCallback(0))();
+                else (this->itms[this->selectItmIdx]->GetCallback(0))();
                 this->dtouch = false;
             }
         }
@@ -394,34 +421,8 @@ namespace pu::ui::elm
                 }
                 if(move)
                 {
-                    if(this->isel < (this->itms.size() - 1))
-                    {
-                        if((this->isel - this->fisel) == (this->ishow - 1))
-                        {
-                            this->fisel++;
-                            this->isel++;
-                            (this->onselch)();
-                            ReloadItemRenders();
-                        }
-                        else
-                        {
-                            this->previsel = this->isel;
-                            this->isel++;
-                            (this->onselch)();
-                            if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
-                            {
-                                if(i == this->isel) this->selfact = 0;
-                                else if(i == this->previsel) this->pselfact = 255;
-                            }
-                            ReloadItemRenders();
-                        }
-                    }
-                    else
-                    {
-                        this->isel = 0;
-                        this->fisel = 0;
-                        ReloadItemRenders();
-                    }
+                    ChangeSelectedIndex(1);
+                    ReloadItemRenders();
                 }
             }
             else if((Down & KEY_DUP) || (Down & KEY_LSTICK_UP) || (Held & KEY_RSTICK_UP))
@@ -443,35 +444,8 @@ namespace pu::ui::elm
                 }
                 if(move)
                 {
-                    if(this->isel > 0)
-                    {
-                        if(this->isel == this->fisel)
-                        {
-                            this->fisel--;
-                            this->isel--;
-                            (this->onselch)();
-                            ReloadItemRenders();
-                        }
-                        else
-                        {
-                            this->previsel = this->isel;
-                            this->isel--;
-                            (this->onselch)();
-                            if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
-                            {
-                                if(i == this->isel) this->selfact = 0;
-                                else if(i == this->previsel) this->pselfact = 255;
-                            }
-                            ReloadItemRenders();
-                        }
-                    }
-                    else
-                    {
-                        this->isel = this->itms.size() - 1;
-                        this->fisel = 0;
-                        if(this->itms.size() >= this->ishow) this->fisel = this->itms.size() - this->ishow;
-                        ReloadItemRenders();
-                    }
+                    ChangeSelectedIndex(-1);
+                    ReloadItemRenders();
                 }
             }
             else if((Down & KEY_DRIGHT) || (Down & KEY_LSTICK_RIGHT) || (Held & KEY_RSTICK_RIGHT))
@@ -493,34 +467,8 @@ namespace pu::ui::elm
                 }
                 if(move)
                 {
-                    // Sorry I seriously can't read these, so I have to hack it with a for loop
-                    for (int i = 0; i < this->ishow; ++i) {
-                        if(this->isel < (this->itms.size() - 1))
-                        {
-                            if((this->isel - this->fisel) == (this->ishow - 1))
-                            {
-                                this->fisel++;
-                                this->isel++;
-                                (this->onselch)();
-                            }
-                            else
-                            {
-                                this->previsel = this->isel;
-                                this->isel++;
-                                (this->onselch)();
-                                if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
-                                {
-                                    if(i == this->isel) this->selfact = 0;
-                                    else if(i == this->previsel) this->pselfact = 255;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            this->isel = 0;
-                            this->fisel = 0;
-                        }
-                    }
+                    // half page quick scroll
+                    ChangeSelectedIndex(this->itemsToShow/2);
                     ReloadItemRenders();
                 }
             }
@@ -543,46 +491,20 @@ namespace pu::ui::elm
                 }
                 if(move)
                 {
-                    for (int i = 0; i < this->ishow; ++i) {
-                        if(this->isel > 0)
-                        {
-                            if(this->isel == this->fisel)
-                            {
-                                this->fisel--;
-                                this->isel--;
-                                (this->onselch)();
-                            }
-                            else
-                            {
-                                this->previsel = this->isel;
-                                this->isel--;
-                                (this->onselch)();
-                                if(!this->itms.empty()) for(s32 i = 0; i < this->itms.size(); i++)
-                                {
-                                    if(i == this->isel) this->selfact = 0;
-                                    else if(i == this->previsel) this->pselfact = 255;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            this->isel = this->itms.size() - 1;
-                            this->fisel = 0;
-                            if(this->itms.size() >= this->ishow) this->fisel = this->itms.size() - this->ishow;
-                        }
-                        ReloadItemRenders();
-                    }
+                    // half page quick scroll
+                    ChangeSelectedIndex(-this->itemsToShow/2);
+                    ReloadItemRenders();
                 }
             }
             else
             {
-                s32 ipc = this->itms[this->isel]->GetCallbackCount();
+                s32 ipc = this->itms[this->selectItmIdx]->GetCallbackCount();
                 if(ipc > 0) for(s32 i = 0; i < ipc; i++)
                 {
-                    if(Down & this->itms[this->isel]->GetCallbackKey(i))
+                    if(Down & this->itms[this->selectItmIdx]->GetCallbackKey(i))
                     {
                         if(this->icdown) this->icdown = false;
-                        else (this->itms[this->isel]->GetCallback(i))();
+                        else (this->itms[this->selectItmIdx]->GetCallback(i))();
                     }
                 }
             }
@@ -595,10 +517,10 @@ namespace pu::ui::elm
         for(u32 i = 0; i < this->loadedicons.size(); i++) render::DeleteTexture(this->loadedicons[i]);
         this->loadednames.clear();
         this->loadedicons.clear();
-        s32 its = this->ishow;
-        if(its > this->itms.size()) its = this->itms.size();
-        if((its + this->fisel) > this->itms.size()) its = this->itms.size() - this->fisel;
-        for(s32 i = this->fisel; i < (its + this->fisel); i++)
+        s32 itemsShown = this->itemsToShow;
+        if(itemsShown > this->itms.size()) itemsShown = this->itms.size();
+        if((itemsShown + this->topItmIdx) > this->itms.size()) itemsShown = this->itms.size() - this->topItmIdx;
+        for(s32 i = this->topItmIdx; i < (itemsShown + this->topItmIdx); i++)
         {
             auto strname = this->itms[i]->GetName();
             auto tex = render::RenderText(this->font, strname, this->itms[i]->GetColor());
