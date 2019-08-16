@@ -76,8 +76,9 @@ namespace pu::ui::elm
             void OnRender(render::Renderer *Drawer);
             void OnInput(u64 Down, u64 Up, u64 Held, bool Touch, bool Focus);
         private:
-            void ChangeSelectedIndex(s32 idxChange);
+            void procInput(u64 input, s32 idxChange);
             void ReloadItemRenders();
+            enum DelayedAutoScrollState { NONE = 0, IN_DELAY, IN_SCROLLING };
             bool dtouch;
             s32 x;
             s32 y;
@@ -93,7 +94,8 @@ namespace pu::ui::elm
             Color clr;
             Color fcs;
             bool icdown;
-            int basestatus;
+            DelayedAutoScrollState delayedAutoScrollState;
+            u64 delayedAutoScrollInput;
             std::chrono::time_point<std::chrono::steady_clock> basetime;
             std::function<void()> onselch;
             std::vector<MenuItem*> itms;

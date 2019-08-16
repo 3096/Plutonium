@@ -90,7 +90,8 @@ namespace pu::ui::elm
         this->icdown = false;
         this->dtouch = false;
         this->fcs = { 40, 40, 40, 255 };
-        this->basestatus = 0;
+        this->delayedAutoScrollState = DelayedAutoScrollState::NONE;
+        this->delayedAutoScrollInput = 0;
         this->font = render::LoadDefaultFont(25);
     }
 
@@ -327,44 +328,73 @@ namespace pu::ui::elm
         }
     }
 
-    void Menu::ChangeSelectedIndex(s32 idxChange)
+    void Menu::procInput(u64 input, s32 idxChange)
     {
-        this->prevSelectItmIdx = this->selectItmIdx;
-        this->selectItmIdx += idxChange;
-
-        // roll over
-        if(this->selectItmIdx < 0) {
-            this->selectItmIdx = this->itms.size() - 1;
-        } else if (this->selectItmIdx >= this->itms.size()) {
-            this->selectItmIdx = 0;
+        if (!delayedAutoScrollInput == input) {
+            delayedAutoScrollInput = input;
+            delayedAutoScrollState = DelayedAutoScrollState::NONE;
         }
 
-        // move menu anchor if needed
-        if(this->topItmIdx > this->selectItmIdx) {
-            this->topItmIdx = this->selectItmIdx;
-        } else if (this->topItmIdx < this->selectItmIdx - (this->itemsToShow - 1)) {
-            this->topItmIdx = this->selectItmIdx - (this->itemsToShow - 1);
+        // Determine to move or not based on delayed auto scroll: delay 0.5 s, auto scroll every 2/60 s
+        bool move;
+        std::chrono::duration<double> clockDiff;
+        switch (delayedAutoScrollState) {
+            case DelayedAutoScrollState::NONE:
+                basetime = std::chrono::steady_clock::now();
+                delayedAutoScrollState = DelayedAutoScrollState::IN_DELAY;
+                move = true;
+                break;
+            case DelayedAutoScrollState::IN_DELAY:
+                clockDiff = std::chrono::steady_clock::now() - basetime;
+                if (clockDiff.count() >= 0.5) {
+                    basetime = std::chrono::steady_clock::now();
+                    delayedAutoScrollState = DelayedAutoScrollState::IN_SCROLLING;
+                    move = true;
+                } else {
+                    move = false;
+                }
+                break;
+            case DelayedAutoScrollState::IN_SCROLLING:
+                clockDiff = std::chrono::steady_clock::now() - basetime;
+                if (clockDiff.count() >= 2.0/60) {
+                    basetime = std::chrono::steady_clock::now();
+                    move = true;
+                } else {
+                    move = false;
+                }
         }
 
-        // invoke callback
-        (this->onselch)();
+        if(move)
+        {
+            this->prevSelectItmIdx = this->selectItmIdx;
+            this->selectItmIdx += idxChange;
 
-        // fade out animation transparencies
-        this->selfact = 0;
-        this->pselfact = 255;
+            // roll over
+            if(this->selectItmIdx < 0) {
+                this->selectItmIdx = this->itms.size() - 1;
+            } else if (this->selectItmIdx >= this->itms.size()) {
+                this->selectItmIdx = 0;
+            }
+
+            // move menu anchor if needed
+            if(this->topItmIdx > this->selectItmIdx) {
+                this->topItmIdx = this->selectItmIdx;
+            } else if (this->topItmIdx < this->selectItmIdx - (this->itemsToShow - 1)) {
+                this->topItmIdx = this->selectItmIdx - (this->itemsToShow - 1);
+            }
+
+            // invoke callback
+            (this->onselch)();
+
+            // fade out animation transparencies
+            this->selfact = 0;
+            this->pselfact = 255;
+            ReloadItemRenders();
+        }
     }
 
     void Menu::OnInput(u64 Down, u64 Up, u64 Held, bool Touch, bool Focus)
     {
-        if(basestatus == 1)
-        {
-            auto curtime = std::chrono::steady_clock::now();
-            auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(curtime - basetime).count();
-            if(diff >= 150)
-            {
-                basestatus = 2;
-            }
-        }
         if(Touch)
         {
             touchPosition tch;
@@ -402,102 +432,27 @@ namespace pu::ui::elm
         }
         else
         {
-            if((Down & KEY_DDOWN) || (Down & KEY_LSTICK_DOWN) || (Held & KEY_RSTICK_DOWN))
+            if(Held & (KEY_DDOWN | KEY_LSTICK_DOWN | KEY_RSTICK_DOWN))
             {
-                bool move = true;
-                if(Held & KEY_RSTICK_DOWN)
-                {
-                    move = false;
-                    if(basestatus == 0)
-                    {
-                        basetime = std::chrono::steady_clock::now();
-                        basestatus = 1;
-                    }
-                    else if(basestatus == 2)
-                    {
-                        basestatus = 0;
-                        move = true;
-                    }
-                }
-                if(move)
-                {
-                    ChangeSelectedIndex(1);
-                    ReloadItemRenders();
-                }
+                procInput((KEY_DDOWN | KEY_LSTICK_DOWN | KEY_RSTICK_DOWN), 1);
             }
-            else if((Down & KEY_DUP) || (Down & KEY_LSTICK_UP) || (Held & KEY_RSTICK_UP))
+            else if(Held & (KEY_DUP | KEY_LSTICK_UP | KEY_RSTICK_UP))
             {
-                bool move = true;
-                if(Held & KEY_RSTICK_UP)
-                {
-                    move = false;
-                    if(basestatus == 0)
-                    {
-                        basetime = std::chrono::steady_clock::now();
-                        basestatus = 1;
-                    }
-                    else if(basestatus == 2)
-                    {
-                        basestatus = 0;
-                        move = true;
-                    }
-                }
-                if(move)
-                {
-                    ChangeSelectedIndex(-1);
-                    ReloadItemRenders();
-                }
+                procInput((KEY_DUP | KEY_LSTICK_UP | KEY_RSTICK_UP), -1);
             }
-            else if((Down & KEY_DRIGHT) || (Down & KEY_LSTICK_RIGHT) || (Held & KEY_RSTICK_RIGHT))
+            else if(Held & (KEY_DLEFT | KEY_LSTICK_LEFT | KEY_RSTICK_LEFT))
             {
-                bool move = true;
-                if(Held & KEY_RSTICK_RIGHT)
-                {
-                    move = false;
-                    if(basestatus == 0)
-                    {
-                        basetime = std::chrono::steady_clock::now();
-                        basestatus = 1;
-                    }
-                    else if(basestatus == 2)
-                    {
-                        basestatus = 0;
-                        move = true;
-                    }
-                }
-                if(move)
-                {
-                    // half page quick scroll
-                    ChangeSelectedIndex(this->itemsToShow/2);
-                    ReloadItemRenders();
-                }
+                procInput((KEY_DLEFT | KEY_LSTICK_LEFT | KEY_RSTICK_LEFT), this->itemsToShow/2);
             }
-            else if((Down & KEY_DLEFT) || (Down & KEY_LSTICK_LEFT) || (Held & KEY_RSTICK_LEFT))
+            else if(Held & (KEY_DRIGHT | KEY_LSTICK_RIGHT | KEY_RSTICK_RIGHT))
             {
-                bool move = true;
-                if(Held & KEY_RSTICK_LEFT)
-                {
-                    move = false;
-                    if(basestatus == 0)
-                    {
-                        basetime = std::chrono::steady_clock::now();
-                        basestatus = 1;
-                    }
-                    else if(basestatus == 2)
-                    {
-                        basestatus = 0;
-                        move = true;
-                    }
-                }
-                if(move)
-                {
-                    // half page quick scroll
-                    ChangeSelectedIndex(-this->itemsToShow/2);
-                    ReloadItemRenders();
-                }
+                procInput((KEY_DRIGHT | KEY_LSTICK_RIGHT | KEY_RSTICK_RIGHT), -this->itemsToShow/2);
             }
             else
             {
+                delayedAutoScrollState = DelayedAutoScrollState::NONE;
+                delayedAutoScrollInput = 0;
+
                 s32 ipc = this->itms[this->selectItmIdx]->GetCallbackCount();
                 if(ipc > 0) for(s32 i = 0; i < ipc; i++)
                 {
